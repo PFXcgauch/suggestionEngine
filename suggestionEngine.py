@@ -39,7 +39,8 @@ Connects to the postrgres transactional database and execute sql statements.
 Then it will return the data set it gets from the sql statment.
 """
 def postgresSql(stmt):
-    #connection to postgres on PA machine
+    #connection to postgres on PA machine.  Have tested and confirmed proper
+    #connection to the database.  Was able to pull table row counts.
     conn = psycopg2.connect(dbname='pfxecomm', user='postgres'
                             ,password='PFXdata123!', host='192.168.20.20'
                             ,port='5432') 
@@ -61,6 +62,8 @@ function.  if status is 0 then it errors out throwing unable to clear/data is
 not clear.
 """
 def clearData():
+    #this table is currently not created as of 3-37-2019.  Needs to be created
+    #before final testing and run.
     stmt_suggestionCnt="SELECT COUNT(*) FROM tempSuggestion;"
     SQLreturn=postgresSql(stmt_suggestionCnt)
     count=SQLretunr[0][0]
@@ -125,6 +128,7 @@ def suggestionEngine(baseProduct,cmpDataSet):
 Main program that collects and processes data sets.
 """
 def Main():
+    #need to create self referenceing on start call. This will allow auto run.
     #gets count of how many items share the product line:
     stmt_prodLineCnt=(f"""SELECT COUNT(*) 
                     FROM pfxecomm.public.{} 
@@ -143,7 +147,9 @@ def Main():
                        WHERE productLineId={};""")
     
     status=clearData()
-    
+    #checkes the status of the temp data table to ensure that it is empty.
+    # 0=not enpty and could not clear
+    # 1=data is clear or was successfully cleared
     if status==0: 
         print("""Error:  data has not been cleared in database. 
               Please clear manually then try again.""")
