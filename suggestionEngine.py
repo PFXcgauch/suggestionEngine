@@ -39,8 +39,10 @@ Connects to the postrgres transactional database and execute sql statements.
 Then it will return the data set it gets from the sql statment.
 """
 def postgresSql(stmt):
-    conn = psycopg2.connect("""dbname='pfxecomm', user='postgres'
-                            ,password='PFXdata123!', host='localhost'""") 
+    #connection to postgres on PA machine
+    conn = psycopg2.connect(dbname='pfxecomm', user='postgres'
+                            ,password='PFXdata123!', host='192.168.20.20'
+                            ,port='5432') 
     cur = conn.cursor()
     
     cur.execute(stmt)
@@ -48,7 +50,7 @@ def postgresSql(stmt):
     
     print(data)
     return data
-
+    
 
 ###############################################################################
 ###############################################################################
@@ -142,7 +144,7 @@ def Main():
     
     status=clearData()
     
-    if status==0:
+    if status==0: 
         print("""Error:  data has not been cleared in database. 
               Please clear manually then try again.""")
         return None
