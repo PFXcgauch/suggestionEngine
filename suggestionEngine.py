@@ -114,7 +114,7 @@ def suggestionEngine(baseProduct,cmpDataSet):
         #this will be the decimal score to match based on most like:    
         score=scoreCnt/atrbCnt 
         #inserts score to the temp table that we will create to store the data
-        stmt_insertScore=(f"""INSERT INTO tempSuggestion(score) 
+        stmt_insertScore=(f"""INSERT INTO pfxecomm.webdata.SuggestionScore(score) 
                          VALUES ({score}) 
                          WHERE itemNumber={};""")
         
@@ -167,7 +167,8 @@ def Main():
             for row in prodLine_data:
                 #may need to format data
                 #place holder sql statement:
-                stmt_insertProdLine=(f"""INSERT INTO tempSuggestion(IMITID
+                stmt_insertProdLine=(f"""
+                INSERT INTO pfxecomm.webdata.SuggestionScore(IMITID
                 ,Score) VALUES({prodLine_data[0][0]},{prodLine_data[0][1]};""")
                 #skip engine
         else:
