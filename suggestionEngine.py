@@ -243,7 +243,4 @@ class suggestion_engine(object):
             items.append(temp)
         return items
 ###############################################################################
-#call via API will post item number to this.
-        #REMOVE 
-test=suggestion_engine.main('11144444')
-print(test)
+
