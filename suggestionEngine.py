@@ -51,7 +51,6 @@ class suggestion_engine(object):
     def engine(cmpDataSet,itemnumber):
         scoreArray=[]
         #get count of attribute table.
-        #NEED to create item atribute table in the Public schema.
         stmt_attributeCnt="""SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
                           WHERE TABLE_NAME='item_property'"""
         
