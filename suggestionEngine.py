@@ -1,187 +1,249 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-Created on Fri Mar 22 15:19:33 2019
+Created on Mon Apr 15 09:19:33 2019
 
 @author: Chris Gauch
 @title: Item to Item suggestion engine
-@last update: 03-27-2019
+@last update: 04-17-2019
 @python version: 3.7.2
 @version: Alpha 1.0.0.0
 ===============================================================================
-LOGIC:
-    
-Pull item I and viewing 
-
-Pull count of product line
-    IF: product line count >= limit_of_titles
-        THEN: Grab top 5 product line
-    ELSE:
-        Get all product line
-        Pull dataset of items in same brand
-        IF: Brand+productline <= TitleLimit 
-            THEN: Grab all
-        ELSE:
-            Run Engine
-            Return engine data set
-            Grab top tileLimit-ProductLine items
+Queries will have to be updated to accomidate table changes
 ===============================================================================
 """
-
-#imported libraries for program
 import psycopg2
 
-
-###############################################################################
-###############################################################################
-"""
-Connects to the postrgres transactional database and execute sql statements.
-Then it will return the data set it gets from the sql statment.
-"""
-def postgresSql(stmt):
-    #connection to postgres on PA machine.  Have tested and confirmed proper
-    #connection to the database.  Was able to pull table row counts.
-    conn = psycopg2.connect(dbname='pfxecomm', user='postgres'
-                            ,password='PFXdata123!', host='192.168.20.20'
-                            ,port='5432') 
-    cur = conn.cursor()
+class suggestion_engine(object):
     
-    cur.execute(stmt)
-    data=cur.fetchall()
-    
-    print(data)
-    return data
-    
-
-###############################################################################
-###############################################################################
-"""
-Check the temp data table and make sure it is blank.  If it is not then it 
-clears the data out.  If it can not then it sends a status back to the main
-function.  if status is 0 then it errors out throwing unable to clear/data is 
-not clear.
-"""
-def clearData():
-    #this table is currently not created as of 3-37-2019.  Needs to be created
-    #before final testing and run.
-    stmt_suggestionCnt="SELECT COUNT(*) FROM tempSuggestion;"
-    SQLreturn=postgresSql(stmt_suggestionCnt)
-    count=SQLretunr[0][0]
-    count=int(count)
-    
-    status=0
-    
-    if count>0:
-        stmt_clearData="DELETE FROM tempSuggestion;"
+    ###########################################################################
+    ###########################################################################
+    """
+    Connects to the postrgres transactional database and execute sql statements.
+    Then it will return the data set it gets from the sql statment.
+    """
+    def postgres(stmt):
+        #Update these to connect to your instance
+        var_dbname='pfxecomm'
+        var_user='postgres'
+        var_password='PFXdata123!'
+        var_host='192.168.20.20'
+        
+        conn = psycopg2.connect(dbname=var_dbname, user=var_user
+                                ,password=var_password, host=var_host
+                                ,port='5432') 
+        cur = conn.cursor()
+        
+        cur.execute(stmt)
         try:
-            postrgres(stmt_clearData)
-        except:
-            return status
-        status=1
-    else:
-        status=1
-    return status
+            data=cur.fetchall()
+    
+        except ValueError:
+            raise Exception("Failed to fetch data")
+    
+        return data
+    ###########################################################################
+    ###########################################################################
+    """
+    This is the actual "engine" that will compare the selected data set to the 
+    brand/product line.
+    """
+    def engine(cmpDataSet,itemnumber):
+        scoreArray=[]
+        #get count of attribute table.
+        #NEED to create item atribute table in the Public schema.
+        stmt_attributeCnt="""SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                          WHERE TABLE_NAME='item_property'"""
+        
+        #gets attributes for currently viewed item. This id must be passed to
+        #this class to run              
+        stmt_basedata=(f"""SELECT * 
+                       FROM pfxecomm.public.item_property 
+                       WHERE item_number='{itemnumber}'""")
+                          
+        SQLreturn=suggestion_engine.postgres(stmt_attributeCnt)
+        atrbCnt=int(SQLreturn[0][0])            
+        
+        SQLreturn=suggestion_engine.postgres(stmt_basedata)
+        baseProduct=SQLreturn
+        
+        #this is causing delay in processing
+        for row in cmpDataSet:
+            scoreCnt=0
+            baseColumn=0
+            for column in row:
+                if column==baseProduct[0][baseColumn]:
+                    scoreCnt+=1 #adds one to score if the items match    
+                baseColumn+=1 #adds 1 to the base col to run through base data
+                
+            #this will be the decimal score to match based on most like: 
+            score=round(scoreCnt/atrbCnt,4) 
+            scoreArray.append([row[0],score])
+        
+        return scoreArray #contains all brand items that 
+    
+    
+    ###########################################################################
+    ###########################################################################
+    """
+    Main program that collects and processes data sets.
+    """
+    def main(itemid):
 
+        tileLimit=15 #Real limit will be 15
+        combineArray=[] #groups all datasets together
+        getArray=[] #gets data back from engine in array form
+        var_score=1.0 #static score used for productline items
+        items=[] #API formatted data
 
-###############################################################################
-###############################################################################
-"""
-This is the actual engine that will match the selected data set to the brand/
-product line.  
-"""
-def suggestionEngine(baseProduct,cmpDataSet):
-    #get count of attribute table
-    stmt_attributeCnt=""
-    SQLreturn=postgresSql(stmt_attributeCnt)
-    atrbCnt=SQLreturn[0][0]
-    atrbCnt=int(atrbCnt)
-    
-    baseRow=0
-    baseColumn=0
-    scoreCnt=0
-    
-    for row in cmpDataSet:
-        baseColumn=0
-        for column in row:
-            if column==baseProduct[baseRow][baseColumn]:
-                scoreCnt+=1
-                baseColumn+=1
+        #get brand and prod id
+        stmt_GetprodBrand=(f"""SELECT brand_id,prodline_id 
+                           FROM pfxecomm.public.item_property
+                           WHERE item_number='{itemid}'""")
         
-            #need to store the count before jumping to the next row of data
-            #get the product ID and store the score into a table
-            #table will need to be wiped after every run 
-            
-        #this will be the decimal score to match based on most like:    
-        score=scoreCnt/atrbCnt 
-        #inserts score to the temp table that we will create to store the data
-        stmt_insertScore=(f"""INSERT INTO pfxecomm.webdata.SuggestionScore(score) 
-                         VALUES ({score}) 
-                         WHERE itemNumber={};""")
+        #executing sql statement
+        SQLreturn=suggestion_engine.postgres(stmt_GetprodBrand)
         
-        postrgresSql(stmt_insertScore)
         
-                        
-    return score
-###############################################################################
-###############################################################################
-"""
-Main program that collects and processes data sets.
-"""
-def Main():
-    #need to create self referenceing on start call. This will allow auto run.
-    #gets count of how many items share the product line:
-    stmt_prodLineCnt=(f"""SELECT COUNT(*) 
-                    FROM pfxecomm.public.{} 
-                    WHERE productLineId={};""")
-    #gets count of how many items share the brand:
-    stmt_brandCnt=(f"""SELECT COUNT(*) 
-                    FROM pfxecomm.public.{} 
-                    WHERE brandid={};""")
-    #gets attribute data for brand:
-    stmt_brandData=(f"""SELECT * 
-                    FROM pfxecomm.public.{} 
-                    WHERE brandid={};""")
-    #gets attribute data for product line:
-    stmt_prodLineData=(f"""SELECT * 
-                       FROM pfxecomm.public.{} 
-                       WHERE productLineId={};""")
     
-    status=clearData()
-    #checkes the status of the temp data table to ensure that it is empty.
-    # 0=not enpty and could not clear
-    # 1=data is clear or was successfully cleared
-    if status==0: 
-        print("""Error:  data has not been cleared in database. 
-              Please clear manually then try again.""")
-        return None
-    else:
-        tileLimit=10  #need to know this before go live
-        SQLreturn=postgresSql(stmt_prodLineCnt)
+        #unpacking data and forcing to string data type
+        var_prodid=str(SQLreturn[0][1])
+        var_brandid=str(SQLreturn[0][0])
+        
+        #get base data
+        stmt_basedata=(f"""SELECT specie_dog,specie_cat,specie_other
+                       ,type_food, type_toy, type_litter, type_medication 
+                       FROM pfxecomm.public.item_property 
+                       WHERE item_number='{itemid}'""")
+        #base data data point to make sure we only compare food to food etc
+        data_points=suggestion_engine.postgres(stmt_basedata)
+        
+        
+###############################################################################
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
+###############################################################################        
+        #gets count of how many items share the brand:
+        stmt_brandCnt=(f"""SELECT COUNT(*) 
+                        FROM pfxecomm.public.item_property 
+                        WHERE brand_id='{var_brandid}'
+                        AND item_number<>'{itemid}'
+                        AND specie_dog={data_points[0][0]}
+                        AND specie_cat={data_points[0][1]}
+                        AND specie_other={data_points[0][2]}
+                        AND type_food={data_points[0][3]}
+                        AND type_toy={data_points[0][4]}
+                        AND type_litter={data_points[0][5]}
+                        AND type_medication={data_points[0][6]};""")
+        
+        stmt_getProdLineId=(f"""SELECT item_number 
+                            FROM pfxecomm.public.item_property
+                            WHERE prodline_id='{var_prodid}'
+                            AND item_number<>'{itemid}'
+                            LIMIT {tileLimit};""")
+        
+        stmt_brandData=(f"""SELECT item_number 
+                        FROM pfxecomm.public.item_property
+                        WHERE brand_id='{var_brandid}'
+                        AND item_number<>'{itemid}'
+                        AND specie_dog={data_points[0][0]}
+                        AND specie_cat={data_points[0][1]}
+                        AND specie_other={data_points[0][2]}
+                        AND type_food={data_points[0][3]}
+                        AND type_toy={data_points[0][4]}
+                        AND type_litter={data_points[0][5]}
+                        AND type_medication={data_points[0][6]};""")
+         
+        #get brand id atribute data excluding product line items:
+        stmt_brandAtrb=(f"""SELECT * 
+                        FROM pfxecomm.public.item_property
+                        WHERE brand_id='{var_brandid}' 
+                        AND prodline_id<>'{var_prodid}' 
+                        AND item_number<>'{itemid}'
+                        AND specie_dog={data_points[0][0]}
+                        AND specie_cat={data_points[0][1]}
+                        AND specie_other={data_points[0][2]}
+                        AND type_food={data_points[0][3]}
+                        AND type_toy={data_points[0][4]}
+                        AND type_litter={data_points[0][5]}
+                        AND type_medication={data_points[0][6]};""")
+        
+        #gets count of how many items share the product line:
+        stmt_prodLineCnt=(f"""SELECT COUNT(*) 
+                        FROM pfxecomm.public.item_property
+                        WHERE prodline_id='{var_prodid}'
+                        AND item_number<>'{itemid}';""")
+###############################################################################
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
+###############################################################################         
+        
+        
+        SQLreturn=suggestion_engine.postgres(stmt_prodLineCnt)
         
         prodLine_dataCnt=SQLreturn[0][0]
         prodLine_dataCnt=int(prodLine_dataCnt)
+
         
-        if prodLine_dataCnt>=tileLimit:
-            SQLreturn=postgresSql(stmt_prodLineData)
-            prodLine_data=SQLreturn
-            for row in prodLine_data:
-                #may need to format data
-                #place holder sql statement:
-                stmt_insertProdLine=(f"""
-                INSERT INTO pfxecomm.webdata.SuggestionScore(IMITID
-                ,Score) VALUES({prodLine_data[0][0]},{prodLine_data[0][1]};""")
-                #skip engine
-        else:
-            SQLreturn=postgresSql(stmt_brandCnt)
-            brand_dataCnt=SQLreturn[0][0]
-            brand_dataCnt=int(brand_dataCnt)
-            if brand_dataCnt+prodLine_dataCnt<=tileLimit:
-                SQLreturn=postgresSQL(stmt_brandData)
-                brand_data=SQLreturn
-                #skip Engine
-            else:
-                SQLreturn=postgresSQL(stmt_brandData)
-                brand_data=SQLreturn
-                #run Engine
-                
-    return None
+        SQLreturn=suggestion_engine.postgres(stmt_brandCnt)
+        
+        brand_dataCnt=SQLreturn[0][0]
+        brand_dataCnt=int(brand_dataCnt)
+        
+        """
+        Product line items do not need to be evaluated by the engine.  This is 
+        due to the fact that they are already the most like the currently
+        viewed product.  So they skip going to the engine and are given a fake
+        score value of 1.0
+        
+        Brand items that are not in the same product line must be evaluated by
+        the engine as same brand can have a lot of differences.
+        
+        If both the combine total for Productline & brand are less than the 
+        total number of tiles we will take all of them to display.
+        """
+        #######################################################################
+        if tileLimit<=prodLine_dataCnt:
+            SQLreturn=suggestion_engine.postgres(stmt_getProdLineId)
+            prodSqlData=SQLreturn 
+            
+            for row in prodSqlData:
+                row=str(row[0])#force to string
+                combineArray.append([row,var_score])
+        #######################################################################      
+        elif tileLimit<=prodLine_dataCnt+brand_dataCnt:
+            SQLreturn=suggestion_engine.postgres(stmt_getProdLineId)
+            prodSqlData=SQLreturn
+            
+            for row in prodSqlData:
+                row=str(row[0])#force to string          
+                combineArray.append([row,var_score])
+           
+            
+            #gets brand data that is not productline and assess it
+            SQLreturn=suggestion_engine.postgres(stmt_brandAtrb)
+            brandSqlData=SQLreturn 
+    
+            getArray=suggestion_engine.engine(brandSqlData,itemid)
+            
+            for item in getArray:
+                combineArray.append(item)
+        #######################################################################   
+        else:  
+            brandData=suggestion_engine.postgres(stmt_brandData)
+            for row in brandData:
+                row=str(row[0]) #force to string
+                combineArray.append([row,var_score])
+        #######################################################################
+        
+        for item in combineArray:
+            temp={} #temporary dictionary to format data for API acceptance
+            temp={
+                  "itemnumber" : item[0],
+                  "score" : item[1]
+                  }
+            items.append(temp)
+        return items
+###############################################################################
+#call via API will post item number to this.
+        #REMOVE 
+test=suggestion_engine.main('11144444')
+print(test)
