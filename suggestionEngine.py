@@ -26,8 +26,8 @@ class suggestion_engine(object):
         #Update these to connect to your instance
         var_dbname='pfxecomm'
         var_user='postgres'
-        var_password='PFXdata123!'
-        var_host='192.168.20.20'
+        var_password='############'
+        var_host='#############'
         
         conn = psycopg2.connect(dbname=var_dbname, user=var_user
                                 ,password=var_password, host=var_host
